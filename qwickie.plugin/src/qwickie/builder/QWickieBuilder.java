@@ -37,6 +37,8 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jdt.core.IClassFile;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.dom.IVariableBinding;
 import org.eclipse.jdt.internal.core.JavaElement;
@@ -52,6 +54,7 @@ import org.eclipse.ui.texteditor.IDocumentProvider;
 import qwickie.QWickieActivator;
 import qwickie.hyperlink.WicketHyperlink;
 import qwickie.preferences.QWickiePreferencePage;
+import qwickie.util.ConstantResolver;
 import qwickie.util.DocumentHelper;
 import qwickie.util.FileSearcher;
 import qwickie.util.TypeHelper;
@@ -334,7 +337,21 @@ public class QWickieBuilder extends IncrementalProjectBuilder {
 			br.read(c);
 			br.close();
 			contents.close();
-			return getJavaLine(new String(c), wid);
+			final String source = new String(c);
+			final int result = getJavaLine(source, wid);
+			if (result != -1) {
+				return result;
+			}
+			// try resolving via JPA metamodel constants from static imports
+			ConstantResolver.log("[Builder] literal search failed for wid=\"" + wid + "\" in " + javaFile.getName() + ", trying constant resolution");
+			final ICompilationUnit icu = JavaCore.createCompilationUnitFrom(javaFile);
+			final String constantName = ConstantResolver.findConstantNameForValue(icu, wid);
+			if (constantName != null) {
+				final int constLine = ConstantResolver.findConstantUsageLine(source, constantName);
+				ConstantResolver.log("[Builder] constant \"" + constantName + "\" usage found at line: " + constLine);
+				return constLine;
+			}
+			ConstantResolver.log("[Builder] no constant match for wid=\"" + wid + "\"");
 		} catch (final Exception e) {
 		}
 		return -1;

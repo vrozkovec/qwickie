@@ -33,6 +33,7 @@ import org.eclipse.core.runtime.Assert;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IPackageFragmentRoot;
 import org.eclipse.jdt.core.JavaCore;
@@ -54,6 +55,7 @@ import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import qwickie.QWickieActivator;
+import qwickie.util.ConstantResolver;
 import qwickie.util.DocumentHelper;
 import qwickie.util.FileSearcher;
 import qwickie.util.TypeHelper;
@@ -121,7 +123,9 @@ public class WicketHyperlink implements IHyperlink {
 						final FindReplaceDocumentAdapter frda = new FindReplaceDocumentAdapter(document);
 						try {
 							if (JAVA.equals(extension)) {
+								ConstantResolver.log("[Hyperlink] searching for wicketId=\"" + wicketId + "\" in " + file.getName());
 								IRegion region = frda.find(0, '"' + wicketId + '"', true, true, false, false);
+								ConstantResolver.log("[Hyperlink] literal search result: " + (region != null ? "found at " + region.getOffset() : "NOT FOUND"));
 								if (region != null) {
 									while (region != null) {
 										final IRegion li = document.getLineInformationOfOffset(region.getOffset());
@@ -136,14 +140,36 @@ public class WicketHyperlink implements IHyperlink {
 										}
 									}
 								} else {
-									// wicket id not found in file, so search up in tree
-									final List<Object> supertypes = TypeHelper.getSupertypes(file);
-									if (supertypes.size() > 0) {
-										if (supertypes.get(0) instanceof IFile) {
-											final IEditorPart oe = IDE.openEditor(activePage, (IFile) supertypes.get(0), false);
-											open();
-											if (!found) {
-												activePage.closeEditor(oe, false);
+									// try resolving via JPA metamodel constants from static imports
+									ConstantResolver.log("[Hyperlink] trying constant resolution for wicketId=\"" + wicketId + "\"");
+									final ICompilationUnit icu = JavaCore.createCompilationUnitFrom(file);
+									final String constantName = ConstantResolver.findConstantNameForValue(icu, wicketId);
+									ConstantResolver.log("[Hyperlink] constantName resolved to: " + constantName);
+									if (constantName != null) {
+										IRegion constRegion = frda.find(0, constantName, true, true, true, false);
+										while (constRegion != null) {
+											final IRegion cli = document.getLineInformationOfOffset(constRegion.getOffset());
+											final String cline = document.get(cli.getOffset(), cli.getLength()).trim();
+											if (cline.startsWith("import ") || cline.startsWith("*") || cline.startsWith("/*") || cline.startsWith("//")) {
+												constRegion = frda.find(constRegion.getOffset() + 1, constantName, true, true, true, false);
+											} else {
+												DocumentHelper.markOccurrence(textEditor, constantName);
+												textEditor.selectAndReveal(constRegion.getOffset(), constantName.length());
+												found = true;
+												break;
+											}
+										}
+									}
+									if (!found) {
+										// wicket id not found in file, so search up in tree
+										final List<Object> supertypes = TypeHelper.getSupertypes(file);
+										if (supertypes.size() > 0) {
+											if (supertypes.get(0) instanceof IFile) {
+												final IEditorPart oe = IDE.openEditor(activePage, (IFile) supertypes.get(0), false);
+												open();
+												if (!found) {
+													activePage.closeEditor(oe, false);
+												}
 											}
 										}
 									}

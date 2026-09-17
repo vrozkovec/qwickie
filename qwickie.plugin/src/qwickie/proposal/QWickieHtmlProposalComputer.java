@@ -23,6 +23,8 @@ import java.util.Map;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.contentassist.CompletionProposal;
@@ -38,6 +40,8 @@ import org.eclipse.wst.sse.ui.contentassist.CompletionProposalInvocationContext;
 import org.eclipse.wst.sse.ui.contentassist.ICompletionProposalComputer;
 
 import qwickie.hyperlink.WicketHyperlink;
+import qwickie.util.ConstantResolver;
+import qwickie.util.ConstantResolver.ResolvedConstant;
 import qwickie.util.DocumentHelper;
 
 public class QWickieHtmlProposalComputer implements ICompletionProposalComputer {
@@ -81,6 +85,20 @@ public class QWickieHtmlProposalComputer implements ICompletionProposalComputer 
 						}
 					}
 				}
+				// also resolve JPA metamodel constants from static imports
+				ConstantResolver.log("[Proposal] resolving constants for " + javaFile.getName());
+				final ICompilationUnit icu = JavaCore.createCompilationUnitFrom(javaFile);
+				final List<ResolvedConstant> constants = ConstantResolver.resolveStaticImportConstants(icu);
+				ConstantResolver.log("[Proposal] resolved " + constants.size() + " constants");
+				for (final ResolvedConstant rc : constants) {
+					final String value = rc.getValue();
+					if (value.length() > 0 && !value.contains(":") && !value.contains("~") && !proposals.containsKey(value)) {
+						final CompletionProposal proposal = new CompletionProposal(value, rtr.getOffset(), existingWid.length(), rtr.getOffset(),
+								img, value, null, "Constant: <b>" + rc.getConstantName() + "</b>");
+						proposals.put(value, proposal);
+					}
+				}
+
 				provider.disconnect(javaFile);
 			}
 		} catch (final Exception e) {
