@@ -20,14 +20,13 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <version.tycho>4.0.13</version.tycho>
-        <java.version>17</java.version>
     </properties>
 
     <repositories>
         <repository>
-            <id>eclipse-2024-12</id>
+            <id>eclipse-2026-03</id>
             <layout>p2</layout>
-            <url>https://download.eclipse.org/releases/2024-12</url>
+            <url>https://download.eclipse.org/releases/2026-03</url>
         </repository>
     </repositories>
 
@@ -44,6 +43,7 @@
                 <artifactId>target-platform-configuration</artifactId>
                 <version>${version.tycho}</version>
                 <configuration>
+                    <executionEnvironment>JavaSE-21</executionEnvironment>
                     <environments>
                         <environment>
                             <os>linux</os>
